@@ -201,7 +201,7 @@ async def dmhaulall(ctx):
 
         # try to get the message history
         # iterate through messages since the last bot message in the channel, newest first
-        # await ctx.send(f"Getting terrible instagram memes from {user.display_name}'s dms")
+        await ctx.send("From: " + user.display_name)
         sentany = False
         async with ctx.typing():
             async for message in user.dm_channel.history(oldest_first=False):
