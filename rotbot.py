@@ -1,3 +1,4 @@
+import subprocess
 import discord
 import os
 import requests
@@ -37,6 +38,38 @@ def get_real_instagram_url(share_url):
     except Exception as e:
         print(f"Error fetching real Instagram URL: {e}")
         return None
+    
+def compressfile(input_file, output_file, target_size):
+    # compress a file to be under target_size in bytes (target_size in KB)
+    # ensure we operate on absolute paths and place the output next to the input
+    input_path = os.path.abspath(input_file)
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    # place output in the same directory as the input unless an absolute path is provided
+    out_basename = os.path.basename(output_file)
+    out_dir = os.path.dirname(output_file) if os.path.isabs(output_file) and os.path.dirname(output_file) else os.path.dirname(input_path) or os.getcwd()
+    output_path = os.path.join(out_dir, out_basename)
+
+    # ensure output has an extension (use same as input if missing)
+    if not os.path.splitext(output_path)[1]:
+        output_path += os.path.splitext(input_path)[1]
+
+    # ffmpeg: overwrite (-y) and set target video bitrate (in kb)
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i", input_path,
+        "-b:v", f"{target_size}k",
+        output_path
+    ]
+
+    completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if completed.returncode != 0:
+        stderr = completed.stderr.decode(errors="ignore")
+        raise RuntimeError(f"ffmpeg failed (rc={completed.returncode}): {stderr}")
+
+    return output_path
 
 @client.event
 async def on_ready():
@@ -132,6 +165,13 @@ async def dmhaul(ctx, user: discord.User=None):
                             if diddownload:
                                 filename = filename + ".mp4"
                                 # send the file to the ctx channel
+                                # compress the file if it's over 8mb
+                                if os.path.getsize(filename) > 8 * 1024 * 1024:
+                                    compressed_filename = os.path.join(os.path.dirname(filename) or ".", "compressed_" + os.path.basename(filename))
+                                    compressed_path = compressfile(filename, compressed_filename, target_size=7000)  # target size in kb
+                                    await ctx.send(file=discord.File(compressed_path))
+                                    os.remove(compressed_path)
+                                    os.remove(filename)
                                 await ctx.send(file=discord.File(filename))
                                 # delete the file
                                 os.remove(filename)
@@ -139,12 +179,26 @@ async def dmhaul(ctx, user: discord.User=None):
                         except Exception as e:
                             print(e)
                     else:
-                        # this is not a reel or post, skip
-                        continue
+                        # this is not a reel or post, just post the message content
+                        await ctx.send(f"Skipped non-reel/post link: {message.content}")
                     
         # send a message in the user's dm channel (will be used to mark messages that have already been scanned)
         if sentany:
             await user.dm_channel.send(f"Sent to here")
+
+@client.command()
+async def sendlocal(ctx):
+    # send all files in the current directory to the ctx channel
+    for filename in os.listdir("."):
+        if filename.endswith(".jpg") or filename.endswith(".mp4"):
+            if os.path.getsize(filename) > 8 * 1024 * 1024:
+                compressed_filename = os.path.join(os.path.dirname(filename) or ".", "compressed_" + os.path.basename(filename))
+                compressed_path = compressfile(filename, compressed_filename, target_size=7000)  # target size in kb
+                await ctx.send(file=discord.File(compressed_path))
+                os.remove(compressed_path)
+                os.remove(filename)
+            await ctx.send(file=discord.File(filename))
+            os.remove(filename)
 
 @client.command()
 async def dmcheck(ctx):
@@ -189,73 +243,73 @@ async def dmcheck(ctx):
         # send the embed to the ctx channel
         await ctx.send(embed=embed)
     
-@client.command()
-async def dmhaulall(ctx):
-    global userwithunreaddms
-    for userid in userwithunreaddms:
-        user = client.get_user(userid)
-        
-        # if user.dm_channel is None:
-        #     await user.create_dm()
-            # await user.dm_channel.send(f"Hello {user.name}, there's been a meme haul request but you've not sent me anything. RIP")
-
-        # try to get the message history
-        # iterate through messages since the last bot message in the channel, newest first
-        await ctx.send("From: " + user.display_name)
-        sentany = False
-        async with ctx.typing():
-            async for message in user.dm_channel.history(oldest_first=False):
-                if message.author == client.user:
-                    # this is the bot message, break
-                    break
-                else:
-                    # expecting instagram link, if not, skip
-                    # check if the message is a link
-                    if message.content.startswith("https://www.instagram.com/") or message.content.startswith("https://instagram.com/"):
-                        reallink = get_real_instagram_url(message.content)
-                        # check if the link is a reel or post
-                        if "/p/" in reallink:
-                            # get the link
-                            link = reallink
-                            # get the id of the post/
-                            try:
-                                post = instaloader.Post.from_shortcode(instaloaderL.context, link.split("/")[-2])
-                                # download the post
-                                diddownload = instaloaderL.download_pic(filename=post.shortcode, url=post.url, mtime=post.date_utc)
-                                if diddownload:
-                                    # send the file to the ctx channel
-                                    await ctx.send(file=discord.File(f"{post.shortcode}.jpg"))
-                                    # delete the file
-                                    os.remove(f"{post.shortcode}.jpg")
-                                    sentany = True
-                            except Exception as e:
-                                print(e)
-                        elif "/reel/" in reallink:
-                            try:
-                                # get the link
-                                link = reallink
-                                # get the id of the reel
-                                post = instaloader.Post.from_shortcode(instaloaderL.context, link.split("/")[-2])
-                                video_url = post.video_url
-                                filename = instaloaderL.format_filename(post, target=post.owner_username)
-                                diddownload = instaloaderL.download_pic(filename=filename, url=video_url, mtime=post.date_utc)
-                                if diddownload:
-                                    filename = filename + ".mp4"
-                                    # send the file to the ctx channel
-                                    await ctx.send(file=discord.File(filename))
-                                    # delete the file
-                                    os.remove(filename)
-                                    sentany = True
-                            except Exception as e:
-                                print(e)
-                        else:
-                            # this is not a reel or post, skip
-                            continue
-                        
-            # send a message in the user's dm channel (will be used to mark messages that have already been scanned)
-            if sentany or userid in userwithunreaddms:
-                await user.dm_channel.send(f"Sent to here")
-                userwithunreaddms.remove(userid)
-
+#@client.command()
+#async def dmhaulall(ctx):
+#    global userwithunreaddms
+#    for userid in userwithunreaddms:
+#        user = client.get_user(userid)
+#        
+#        # if user.dm_channel is None:
+#        #     await user.create_dm()
+#            # await user.dm_channel.send(f"Hello {user.name}, there's been a meme haul request but you've not sent me anything. RIP")
+#
+#        # try to get the message history
+#        # iterate through messages since the last bot message in the channel, newest first
+#        await ctx.send("From: " + user.display_name)
+#        sentany = False
+#        async with ctx.typing():
+#            async for message in user.dm_channel.history(oldest_first=False):
+#                if message.author == client.user:
+#                    # this is the bot message, break
+#                    break
+#                else:
+#                    # expecting instagram link, if not, skip
+#                    # check if the message is a link
+#                    if message.content.startswith("https://www.instagram.com/") or message.content.startswith("https://instagram.com/"):
+#                        reallink = get_real_instagram_url(message.content)
+#                        # check if the link is a reel or post
+#                        if "/p/" in reallink:
+#                            # get the link
+#                            link = reallink
+#                            # get the id of the post/
+#                            try:
+#                                post = instaloader.Post.from_shortcode(instaloaderL.context, link.split("/")[-2])
+#                                # download the post
+#                                diddownload = instaloaderL.download_pic(filename=post.shortcode, url=post.url, mtime=post.date_utc)
+#                                if diddownload:
+#                                    # send the file to the ctx channel
+#                                    await ctx.send(file=discord.File(f"{post.shortcode}.jpg"))
+#                                    # delete the file
+#                                    os.remove(f"{post.shortcode}.jpg")
+#                                    sentany = True
+#                            except Exception as e:
+#                                print(e)
+#                        elif "/reel/" in reallink:
+#                            try:
+#                                # get the link
+#                                link = reallink
+#                                # get the id of the reel
+#                                post = instaloader.Post.from_shortcode(instaloaderL.context, link.split("/")[-2])
+#                                video_url = post.video_url
+#                                filename = instaloaderL.format_filename(post, target=post.owner_username)
+#                                diddownload = instaloaderL.download_pic(filename=filename, url=video_url, mtime=post.date_utc)
+#                                if diddownload:
+#                                    filename = filename + ".mp4"
+#                                    # send the file to the ctx channel
+#                                    await ctx.send(file=discord.File(filename))
+#                                    # delete the file
+#                                    os.remove(filename)
+#                                    sentany = True
+#                            except Exception as e:
+#                                print(e)
+#                        else:
+#                            # this is not a reel or post, skip
+#                            continue
+#                        
+#            # send a message in the user's dm channel (will be used to mark messages that have already been scanned)
+#            if sentany or userid in userwithunreaddms:
+#                await user.dm_channel.send(f"Sent to here")
+#                userwithunreaddms.remove(userid)
+#
 
 client.run(TOKEN)
