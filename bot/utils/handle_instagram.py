@@ -13,36 +13,38 @@ def get_real_instagram_url(share_url):
         response = requests.get(share_url, allow_redirects=True)
         return response.url  # This is the real post URL
     except Exception as e:
-        print(f"Error fetching real Instagram URL: {e}")
-        return None
+        logger.error(f"Error fetching real Instagram URL: {e}")
+        return share_url
 
-async def handle_instagram_link(ctx, post_url):
+async def handle_instagram_link(ctx, user, post_url):
     try:
-        post = instaloader.Post.from_shortcode(instaloader_class.context, post_url.split("/")[:-2])
-        logger.info(f"{post_url.split("/")[:-2]}")
-        logger.info(f"{post}")
+        logger.info(f"Getting link {post_url}")
+        post = instaloader.Post.from_shortcode(instaloader_class.context, post_url.split("/")[4])
         is_video = False
-        if "/reel/" in post_url:
+        if "/reel/" in post_url or "/reels/" in post_url:
             is_video = True
             post_url = post.video_url
             file_name = instaloader_class.format_filename(post, target=post.owner_username)
         elif "/p/" in post_url:
             file_name = post.shortcode
             post_url = post.url
-        file = instaloader_class.download_pic(filename=file_name, url=post_url, mtime=post.date_utc)
-        if file:
+        file = requests.get(post_url)
+        if file.status_code == 200:
             file_extension = "mp4" if is_video else "jpg"
             file_name = file_name + "." + file_extension
-            if is_video and os.path.getsize(post.shortcode) > 8 * 1024 * 1024:
-                compressed_filename = os.path.join(os.path.dirname(file_name) or ".", f"compressed_{file_name}")
-                compressed_path = compressfile("file_name", compressed_filename, target_size=7000)  # target size in kb
+            with open(file_name, "wb") as f:
+                f.write(file.content)
+            compressed_filename = False
+            if is_video and os.path.getsize(file_name) > 8 * 1024 * 1024:
+                compressed_filename = f"compressed_{file_name}"
+                compressfile(file_name, compressed_filename) 
             
-            await ctx.send(file=File(f"{file_name if compressed_path is None else compressed_filename}", description=f"Posted by {ctx.author.id}"))
-            Path.unlink("file_name")
-            if compressed_filename is not None: 
+            await ctx.send(file=File(f"{compressed_filename if compressed_filename else file_name}", description=f"Posted by {user.id}"))
+            Path.unlink(f"{file_name}")
+            if compressed_filename:
                 Path.unlink(f"{compressed_filename}")
             return True
         else:
             await ctx.send(f"Failed to download image {post_url}")
-    except Exception:
-        await ctx.send(f"Error thrown when accessing {post_url}")
+    except Exception as e:
+        await ctx.send(f"{e}\n\nError thrown when accessing {post_url}")

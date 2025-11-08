@@ -20,17 +20,18 @@ class DMHaul(commands.Cog):
         sent_any = False
         async with ctx.typing():
             messages = []
-
             async for message in user.dm_channel.history(oldest_first=False):
                 if message.author == self.bot.user:
                     break
                 else:
                     messages.append({"id": message.id, "content":message.content})
+            logger.info(f"Sending {len(messages)} messages")
             for message in sorted(messages, key=lambda x: int(x["id"])):
                 if message["content"].startswith("https://www.instagram.com/") or message["content"].startswith("https://instagram.com/"):
                     real_link = get_real_instagram_url(message["content"])
                     logger.info(f"{real_link}")
-                    sent_any = sent_any or await handle_instagram_link(ctx, real_link)
+                    sent_any = await handle_instagram_link(ctx, user, real_link) or sent_any
+
         if sent_any:
             await user.dm_channel.send("Sent to here")        
 
