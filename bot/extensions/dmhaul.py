@@ -2,7 +2,7 @@ from discord import User
 from discord.ext import commands
 from bot import guild_ids
 from bot import InstaBot
-from bot.utils.links import link_handler
+from bot.links import link_handler
 from loguru import logger
 class DMHaul(commands.Cog):
     def __init__(self, bot: InstaBot) -> None:
