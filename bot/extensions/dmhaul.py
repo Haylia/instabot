@@ -2,7 +2,7 @@ from discord import User
 from discord.ext import commands
 from bot import guild_ids
 from bot import InstaBot
-from bot.utils.handle_instagram import get_real_instagram_url, handle_instagram_link
+from bot.utils.links import link_handler
 from loguru import logger
 class DMHaul(commands.Cog):
     def __init__(self, bot: InstaBot) -> None:
@@ -24,14 +24,10 @@ class DMHaul(commands.Cog):
                 if message.author == self.bot.user:
                     break
                 else:
-                    messages.append({"id": message.id, "content":message.content})
+                    messages.append({"id": message.id, "content":message.content.strip()})
             logger.info(f"Sending {len(messages)} messages")
             for message in sorted(messages, key=lambda x: int(x["id"])):
-                if message["content"].startswith("https://www.instagram.com/") or message["content"].startswith("https://instagram.com/"):
-                    real_link = get_real_instagram_url(message["content"])
-                    logger.info(f"{real_link}")
-                    sent_any = await handle_instagram_link(ctx, user, real_link) or sent_any
-
+                sent_any = await link_handler.handle_link(message["content"], user, ctx) or sent_any
         if sent_any:
             await user.dm_channel.send("Sent to here")        
 

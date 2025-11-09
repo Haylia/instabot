@@ -16,7 +16,7 @@ def get_real_instagram_url(share_url):
         logger.error(f"Error fetching real Instagram URL: {e}")
         return share_url
 
-async def handle_instagram_link(ctx, user, post_url):
+async def handle_instagram_link(post_url, user, ctx):
     try:
         logger.info(f"Getting link {post_url}")
         post = instaloader.Post.from_shortcode(instaloader_class.context, post_url.split("/")[4])
@@ -48,3 +48,9 @@ async def handle_instagram_link(ctx, user, post_url):
             await ctx.send(f"Failed to download image {post_url}")
     except Exception as e:
         await ctx.send(f"{e}\n\nError thrown when accessing {post_url}")
+
+url_list = ["www.instagram.com", "instagram.com"]
+
+def url_handler(url, user, ctx):
+    url = get_real_instagram_url(url)
+    return handle_instagram_link(url, user, ctx)

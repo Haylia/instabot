@@ -1,12 +1,13 @@
 [project]
 name = "instabot"
-version = "0.1.0"
-description = "Add your description here"
+version = "2.0.0"
+description = "Instantaneous Kilogram Internals"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "discord-py>=2.6.4",
     "dotenv>=0.9.9",
+    "gallery-dl>=1.30.10",
     "instaloader>=4.14.2",
     "loguru>=0.7.3",
     "requests>=2.32.5",
