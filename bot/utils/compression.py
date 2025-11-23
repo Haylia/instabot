@@ -5,11 +5,12 @@ from pathlib import Path
 import shutil
 from loguru import logger
 
-
+@logger.catch
 def compressfile(input_file, output_file, target_mb=8, audio_quality=128):
     # compress a file to be under target_size in bytes (target_size in KB)
     # ensure we operate on absolute paths and place the output next to the input
     input_path = os.path.abspath(input_file)
+    logger.info("Hi")
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input file not found: {input_path}")
 

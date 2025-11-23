@@ -15,7 +15,6 @@ def load_extensions():
         link_handler.add_domains(module.url_list, module.url_handler)
         logger.info(f"Loaded site handling for: {filename}")
 
-
 class LinkHandler:
     def __init__(self):
         self.urls = dict()
@@ -31,15 +30,22 @@ class LinkHandler:
         await ctx.send(embed=embed)
         return True
 
-    def handle_link(self, url, user, ctx):
+    async def _error_handling(self, url, user, ctx):
+        embed = Embed(title="Error when grabbing site", color=Color.red())
+        embed.add_field(name="User", value=user.display_name, inline=False)
+        embed.add_field(name="Content", value=url, inline=False)
+        await ctx.send(embed=embed)
+        return False
+
+    async def handle_link(self, url, user, ctx):
         try:
             site = urlparse(url).netloc
-            if site in self.urls.keys():
-                return self.urls[site](url, user, ctx)
+            if site in self.urls:
+                return await self.urls[site](url, user, ctx, self._error_handling)
             else:
-                return self._default_handling(url, user, ctx)
+                return await self._default_handling(url, user, ctx)
         except Exception:
-            return self._default_handling(url, user, ctx)
+            return await self._error_handling(url, user, ctx)
 
 
 link_handler = LinkHandler()
