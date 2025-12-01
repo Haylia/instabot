@@ -5,7 +5,6 @@ from bot import InstaBot
 from bot.links import link_handler
 from loguru import logger
 
-
 class DMHaul(commands.Cog):
     def __init__(self, bot: InstaBot) -> None:
         self.bot = bot
@@ -19,6 +18,7 @@ class DMHaul(commands.Cog):
         sent_any = False
         async with ctx.typing():
             messages = []
+            
             async for message in user.dm_channel.history(oldest_first=False):
                 if message.author == self.bot.user:
                     break
@@ -27,11 +27,15 @@ class DMHaul(commands.Cog):
                         {"id": message.id, "content": message.content.strip()}
                     )
             logger.info(f"Sending {len(messages)} messages")
-            for message in sorted(messages, key=lambda x: int(x["id"])):
-                sent_any = (
-                    await link_handler.handle_link(message["content"], user, ctx)
-                    or sent_any
-                )
+            if len(messages) > 0:
+
+                for message in sorted(messages, key=lambda x: int(x["id"])):
+                    sent_any = (
+                        await link_handler.handle_link(message["content"], user, ctx)
+                        or sent_any
+                    )
+            else:
+                await ctx.send("User has no messages sent to the bot.")
         if sent_any:
             await user.dm_channel.send("Sent to here")
 

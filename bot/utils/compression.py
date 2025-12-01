@@ -4,9 +4,12 @@ from math import floor
 from pathlib import Path
 import shutil
 from loguru import logger
+from dotenv import load_dotenv
+
+load_dotenv()
 
 @logger.catch
-def compressfile(input_file, output_file, target_mb=8, audio_quality=128):
+def compressfile(input_file, output_file, target_mb=8, audio_quality=128, first_run=True):
     # compress a file to be under target_size in bytes (target_size in KB)
     # ensure we operate on absolute paths and place the output next to the input
     input_path = os.path.abspath(input_file)
@@ -41,8 +44,10 @@ def compressfile(input_file, output_file, target_mb=8, audio_quality=128):
             "-y",  # overwrite output
             "-i",
             input_file,
+            "-vf",
+            "pad=ceil(iw/2)*2:ceil(ih/2)*2" if first_run else "scale=trunc(iw/8)*6:trunc(ih/8)*6",
             "-c:v",
-            "libx264",
+            "h264_amf" if os.getenv("USE_AMD_GPU") == "true" else "libx264",
             "-b:v",
             f"{bitrate}k",
             "-pass",
@@ -62,8 +67,10 @@ def compressfile(input_file, output_file, target_mb=8, audio_quality=128):
             "-y",
             "-i",
             input_file,
+            "-vf",
+            "pad=ceil(iw/2)*2:ceil(ih/2)*2" if first_run else "scale=trunc(iw/8)*6:trunc(ih/8)*6",
             "-c:v",
-            "libx264",
+            "h264_amf" if os.getenv("USE_AMD_GPU") == "true" else "libx264",
             "-b:v",
             f"{bitrate}k",
             "-pass",
@@ -76,7 +83,6 @@ def compressfile(input_file, output_file, target_mb=8, audio_quality=128):
         ],
         check=True,
     )
-
     if os.path.getsize(output_file) > 8 * 1024 * 1024:
         logger.info(
             f"Failed with {target_mb}mb target, attempting {floor(0.75 * target_mb)} target"
@@ -84,8 +90,9 @@ def compressfile(input_file, output_file, target_mb=8, audio_quality=128):
         compressfile(
             output_file,
             f"a_{output_file}",
-            floor(0.75 * target_mb),
-            floor(audio_quality),
+            floor(0.75 * target_mb if not first_run else target_mb),
+            audio_quality=floor(0.75 * audio_quality if not first_run else audio_quality),
+            first_run=False
         )
         Path.unlink(output_file)
         shutil.move(Path(f"a_{output_file}"), Path(output_file))

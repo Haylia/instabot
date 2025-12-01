@@ -11,7 +11,7 @@ class InstaBot(commands.Bot):
     async def on_ready(self):
         logger.info(f"Logged in as {self.user} on {len(self.guilds)} guilds.")
         logger.info(f"The bot prefix is {self.command_prefix}")
-
+    
 
 bot = InstaBot(
     command_prefix=[str(getenv("DISCORD_PREFIX"))],
